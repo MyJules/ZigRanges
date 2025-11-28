@@ -194,6 +194,38 @@ pub fn main() void {
 }
 ```
 
+
+### Custom Struct
+
+```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
+fn toUpperCase(c: u8) u8 {
+    if (c >= 'a' and c <= 'z') {
+        return c - 32;
+    }
+    return c;
+}
+
+pub fn main() !void {
+    const string = "Hello, Zig Ranges!";
+
+    const range = ranges.ArrayRange(u8).init(string);
+    var it = range
+        .map(toUpperCase);
+
+    while (it.next()) |c| {
+        std.debug.print("{c}", .{c});
+    }
+
+    std.debug.print("\n", .{});
+
+    std.debug.print("{s} \n", .{string});
+}
+
+```
+
 ## API Reference
 
 ### `Range(T)`
