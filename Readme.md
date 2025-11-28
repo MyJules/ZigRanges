@@ -131,7 +131,7 @@ fn square(x: usize) usize {
 }
 
 fn lessThen(x: usize) bool {
-    return x > 8;
+    return x < 20;
 }
 
 pub fn main() !void {
