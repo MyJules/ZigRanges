@@ -107,6 +107,12 @@ pub fn main() void {
     } else {
         std.debug.print("Not found\n", .{});
     }
+
+    if (it.find(1)) |found| {
+        std.debug.print("Found: {}\n", .{found});
+    } else {
+        std.debug.print("Not found\n", .{});
+    }
 }
 ```
 
