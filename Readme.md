@@ -31,6 +31,9 @@ pub fn main() void {
 ### Filtering and Mapping
 
 ```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
 fn isEven(x: usize) bool {
     return x % 2 == 0;
 }
@@ -54,6 +57,9 @@ pub fn main() void {
 
 ### Array
 ```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
 fn isEven(x: usize) bool {
     return x % 2 == 0;
 }
@@ -79,6 +85,9 @@ pub fn main() void {
 ### Finding Elements
 
 ```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
 fn isEven(x: usize) bool {
     return x % 2 == 0;
 }
