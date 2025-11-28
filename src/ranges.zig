@@ -38,15 +38,11 @@ pub fn Range(comptime T: type) type {
             };
         }
 
-        fn nextRaw(self: *@This()) ?usize {
+        pub fn next(self: *@This()) ?usize {
             if (self.start >= self.end) return null;
             const v = self.start;
             self.start += 1;
             return v;
-        }
-
-        pub fn next(self: *@This()) ?usize {
-            return self.nextRaw();
         }
 
         fn nextAdapter(ctx: *anyopaque) ?usize {

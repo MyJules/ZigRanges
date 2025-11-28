@@ -5,10 +5,10 @@ fn isEven1(x: i32) bool { return @mod(x, 2) == 0; }
 fn square1(x: i32) i32 { return x * x; }
 fn isEven(x: usize) bool { return x % 2 == 0; }
 fn square(x: usize) usize { return x * x; }
-fn lessThen(x: usize) bool { return x < 1000; }
+fn lessThen(x: usize) bool { return x < 100; }
 
 pub fn main() void {
-    const range = ranges.Range(usize).init(0, 20);
+    const range = ranges.Range(usize).init(0, 1000);
     var it = range
         .filter(isEven)
         .map(square)
