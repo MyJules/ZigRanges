@@ -120,7 +120,7 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
         pub fn find(self: *const @This(), value: Out) ?Out {
             var iter = self.*;
             while (iter.next()) |v| {
-                if (value == v) return v;
+                if (eq(Out, value, v)) return v;
             }
             return null;
         }
@@ -162,3 +162,34 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         }
     };
 }
+
+pub fn eq(comptime T: type, a: T, b: T) bool {
+    const info = @typeInfo(T);
+
+    switch (info) {
+        // Primitive numeric types
+        .int, .float, .bool, .enum_literal => return a == b,
+
+        // Structs: compare field by field
+        .@"struct" => {
+            inline for (info.@"struct".fields) |field| {
+                if (!eq(field.type, @field(a, field.name), @field(b, field.name))) return false;
+            }
+            return true;
+        },
+
+        // Pointers: compare addresses
+        .pointer => return a == b,
+
+        // Arrays: compare element-wise
+        .array => {
+            inline for (a, 0..) |val, i| {
+                if (!eq(@TypeOf(val), val, b[i])) return false;
+            }
+            return true;
+        },
+
+        else => @compileError("eq: unsupported type"),
+    }
+}
+
