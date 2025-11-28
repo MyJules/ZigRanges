@@ -24,7 +24,7 @@ pub fn main() void {
     std.debug.print("\n", .{});
 
     const array = [_]i32{1, 2, 3, 4, 5, 6, 7, 8};
-    var arrayRange = ranges.ArrayRange(i32).init(&array);
+    const arrayRange = ranges.ArrayRange(i32).init(&array);
     var it1 = arrayRange
         .map(square1);
 
