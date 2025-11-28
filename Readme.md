@@ -52,9 +52,41 @@ pub fn main() void {
 }
 ```
 
+### Array
+```zig
+fn isEven(x: usize) bool {
+    return x % 2 == 0;
+}
+
+fn square(x: usize) usize {
+    return x * x;
+}
+
+pub fn main() void {
+    const array = [_]usize{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    const arrayRange = ranges.ArrayRange(usize).init(&array);
+    var it = arrayRange
+        .filter(isEven)
+        .map(square);
+
+    while (it.next()) |value| {
+        std.debug.print("{} ", .{value});
+    }
+    // Output: 0 4 16 36 64
+}
+```
+
 ### Finding Elements
 
 ```zig
+fn isEven(x: usize) bool {
+    return x % 2 == 0;
+}
+
+fn square(x: usize) usize {
+    return x * x;
+}
+
 pub fn main() void {
     const range = ranges.Range(usize).init(0, 100);
     var it = range
@@ -72,21 +104,40 @@ pub fn main() void {
 ### Collecting Results
 
 ```zig
-pub fn main() void {
-    const allocator = std.heap.GeneralPurposeAllocator(.{}){};
-    defer allocator.deinit();
+const std = @import("std");
+const ranges = @import("ranges");
+
+fn isEven(x: usize) bool {
+    return x % 2 == 0;
+}
+
+fn square(x: usize) usize {
+    return x * x;
+}
+
+fn lessThen(x: usize) bool {
+    return x > 8;
+}
+
+pub fn main() !void {
+    var allocator = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = allocator.deinit();
+
     const gp_allocator = allocator.allocator();
 
-    const range = ranges.Range(usize).init(0, 100);
+    const array = [_]usize{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+    const range = ranges.ArrayRange(usize).init(&array);
     var it = range
         .filter(isEven)
         .map(square)
         .filter(lessThen);
 
-    const collected = try it.collect(gp_allocator);
+    var collected = try it.collect(gp_allocator);
     defer collected.deinit(gp_allocator);
 
     std.debug.print("Collected: {any}\n", .{collected.items});
+
+    std.debug.print("Type of it: {s}\n", .{@typeName(@TypeOf(it))});
 }
 ```
 
