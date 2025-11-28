@@ -34,7 +34,7 @@ pub fn ArrayRange(comptime T: type) type {
         }
 
         pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
-            var results = try std.ArrayList(T).initCapacity(allocator, 10);
+            var results = try std.ArrayList(T).initCapacity(allocator, self.arr.len);
             var iter = self.*;
             while (iter.next()) |v| {
                 try results.append(allocator, v);
@@ -85,7 +85,7 @@ pub fn Range(comptime T: type) type {
         }
 
         pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
-            var results = try std.ArrayList(T).initCapacity(allocator, 10);
+            var results = try std.ArrayList(T).initCapacity(allocator, self.end - self.start);
             var iter = self.*;
             while (iter.next()) |v| {
                 try results.append(allocator, v);
@@ -145,7 +145,7 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
         }
 
         pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(Out) {
-            var results = try std.ArrayList(Out).initCapacity(allocator, 10);
+            var results = try std.ArrayList(Out).initCapacity(allocator, 0);
             var iter = self.*;
             while (iter.next()) |v| {
                 try results.append(allocator, v);
@@ -190,7 +190,7 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         }
 
         pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
-            var results = try std.ArrayList(T).initCapacity(allocator, 10);
+            var results = try std.ArrayList(T).initCapacity(allocator, 0);
             var iter = self.*;
             while (iter.next()) |v| {
                 try results.append(allocator, v);
