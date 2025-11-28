@@ -27,7 +27,7 @@ pub fn ArrayRange(comptime T: type) type {
         pub fn find(self: *const @This(), value: T) ?T {
             var iter = self.*;
             while (iter.next()) |v| {
-                if (value == v) return v;
+                if (eq(T, value, v)) return v;
             }
             return null;
         }
@@ -69,7 +69,7 @@ pub fn Range(comptime T: type) type {
         pub fn find(self: *const @This(), value: T) ?T {
             var iter = self.*;
             while (iter.next()) |v| {
-                if (value == v) return v;
+                if (eq(T, value, v)) return v;
             }
             return null;
         }
@@ -156,14 +156,14 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         pub fn find(self: *const @This(), value: T) ?T {
             var iter = self.*;
             while (iter.next()) |v| {
-                if (value == v) return v;
+                if (eq(T, value, v)) return v;
             }
             return null;
         }
     };
 }
 
-pub fn eq(comptime T: type, a: T, b: T) bool {
+fn eq(comptime T: type, a: T, b: T) bool {
     const info = @typeInfo(T);
 
     switch (info) {

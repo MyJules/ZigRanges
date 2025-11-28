@@ -10,7 +10,7 @@ fn square1(x: i32) i32 {
 }
 
 fn squareMyType(x: MyType) MyType {
-    return MyType{.lol = x.lol * x.lol};
+    return MyType{ .lol = x.lol * x.lol };
 }
 
 fn isEven(x: usize) bool {
@@ -78,21 +78,19 @@ pub fn main() void {
     std.debug.print("````````````````", .{});
     std.debug.print("\n", .{});
 
-    const myTypeArray = [_]MyType{MyType{.lol = 2}, MyType{.lol = 4}};
+    const myTypeArray = [_]MyType{ MyType{ .lol = 2 }, MyType{ .lol = 4 } };
     const arrayRange1 = ranges.ArrayRange(MyType).init(&myTypeArray);
     var it2 = arrayRange1
         .map(squareMyType);
 
-    const value2 = it2.find(MyType{.lol = 16});
+    const value2 = it2.find(MyType{ .lol = 16 });
     if (value2) |value| {
         std.debug.print("Found: {}\n", .{value.lol});
     } else {
         std.debug.print("Not found \n", .{});
     }
 
-
     while (it2.next()) |v| {
         std.debug.print("{d} ", .{v.lol});
     }
-
 }
