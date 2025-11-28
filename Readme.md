@@ -159,6 +159,9 @@ pub fn main() !void {
 ### Custom Struct
 
 ```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
 const MyStruct = struct {
     value: i32,
 };
