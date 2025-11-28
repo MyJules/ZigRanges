@@ -60,7 +60,7 @@ pub fn main() void {
     var it = range
         .filter(isEven)
         .map(square);
-    
+
     if (it.find(1296)) |found| {
         std.debug.print("Found: {}\n", .{found});
     } else {
@@ -72,39 +72,21 @@ pub fn main() void {
 ### Collecting Results
 
 ```zig
-pub fn main() !void {
-    const allocator = std.heap.page_allocator;
-    
-    const range = ranges.Range(usize).init(0, 10);
-    var results = try range
+pub fn main() void {
+    const allocator = std.heap.GeneralPurposeAllocator(.{}){};
+    defer allocator.deinit();
+    const gp_allocator = allocator.allocator();
+
+    const range = ranges.Range(usize).init(0, 100);
+    var it = range
         .filter(isEven)
         .map(square)
-        .collect(allocator);
-    
-    defer results.deinit();
-    
-    for (results.items) |item| {
-        std.debug.print("{} ", .{item});
-    }
-    // Output: 0 4 16 36 64
-}
-```
+        .filter(lessThen);
 
-### Array Iteration
+    const collected = try it.collect(gp_allocator);
+    defer collected.deinit(gp_allocator);
 
-```zig
-pub fn main() !void {
-    const array = [_]i32{ 1, 2, 3, 4, 5, 6 };
-    const arrayRange = ranges.ArrayRange(i32).init(&array);
-    
-    var it = arrayRange
-        .filter(fn (x: i32) bool { return @mod(x, 2) == 0; })
-        .map(fn (x: i32) i32 { return x * x; });
-    
-    while (it.next()) |value| {
-        std.debug.print("{} ", .{value});
-    }
-    // Output: 4 16 36
+    std.debug.print("Collected: {any}\n", .{collected.items});
 }
 ```
 
