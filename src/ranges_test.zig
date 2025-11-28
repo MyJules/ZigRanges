@@ -125,3 +125,17 @@ test "custom type range find test" {
     const not_found = it.find(99);
     try std.testing.expect(not_found == null);
 }
+
+test "collect function test" {
+    const allocator = std.testing.allocator;
+    const range = ranges.Range(usize).init(0, 20);
+    var collected = try range
+        .filter(evenUsize)
+        .map(squareUsize)
+        .collect(allocator);
+
+    defer collected.deinit(allocator);
+
+    const expected = [_]usize{ 0, 4, 16, 36, 64, 100, 144, 196, 256, 324 };
+    try std.testing.expectEqualSlices(usize, expected[0..], collected.items);
+}

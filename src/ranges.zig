@@ -32,6 +32,15 @@ pub fn ArrayRange(comptime T: type) type {
             }
             return null;
         }
+
+        pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
+            var results = try std.ArrayList(T).initCapacity(allocator, 10);
+            var iter = self.*;
+            while (iter.next()) |v| {
+                try results.append(allocator, v);
+            }
+            return results;
+        }
     };
 }
 
@@ -73,6 +82,15 @@ pub fn Range(comptime T: type) type {
                 if (eq(T, value, v)) return v;
             }
             return null;
+        }
+
+        pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
+            var results = try std.ArrayList(T).initCapacity(allocator, 10);
+            var iter = self.*;
+            while (iter.next()) |v| {
+                try results.append(allocator, v);
+            }
+            return results;
         }
     };
 }
@@ -125,6 +143,15 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
             }
             return null;
         }
+
+        pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(Out) {
+            var results = try std.ArrayList(Out).initCapacity(allocator, 10);
+            var iter = self.*;
+            while (iter.next()) |v| {
+                try results.append(allocator, v);
+            }
+            return results;
+        }
     };
 }
 
@@ -160,6 +187,15 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
                 if (eq(T, value, v)) return v;
             }
             return null;
+        }
+
+        pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
+            var results = try std.ArrayList(T).initCapacity(allocator, 10);
+            var iter = self.*;
+            while (iter.next()) |v| {
+                try results.append(allocator, v);
+            }
+            return results;
         }
     };
 }
