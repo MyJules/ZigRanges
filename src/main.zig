@@ -24,7 +24,7 @@ pub fn main() void {
         .map(square)
         .filter(lessThen);
 
-    const lol = it.find(2);
+    const lol = it.find(12968);
     if (lol) |l| {
         std.debug.print("Found: {}\n", .{l});
     } else {

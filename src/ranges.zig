@@ -40,7 +40,7 @@ pub fn Range(comptime T: type) type {
         end: T,
 
         pub fn init(start: usize, end: usize) @This() {
-            return @This() {
+            return @This(){
                 .start = start,
                 .end = end,
             };
@@ -56,10 +56,6 @@ pub fn Range(comptime T: type) type {
         fn nextAdapter(ctx: *anyopaque) ?usize {
             const p: *@This() = @ptrCast(@alignCast(@alignOf(ctx)));
             return p.next();
-        }
-
-        pub fn toIter(self: *@This()) Iterator(usize) {
-            return .{ .nextFn = nextAdapter, .ctx = self };
         }
 
         pub fn map(self: *const @This(), comptime F: anytype) MapIterator(@This(), F) {
@@ -166,4 +162,3 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         }
     };
 }
-
