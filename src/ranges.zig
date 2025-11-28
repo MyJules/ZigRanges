@@ -23,6 +23,14 @@ pub fn ArrayRange(comptime T: type) type {
         pub fn filter(self: *const @This(), comptime P: anytype) FilterIterator(@This(), P) {
             return FilterIterator(@This(), P).init(self.*);
         }
+
+        pub fn find(self: *const @This(), value: T) ?T {
+            var iter = self.*;
+            while (iter.next()) |v| {
+                if (value == v) return v;
+            }
+            return null;
+        }
     };
 }
 
@@ -60,6 +68,14 @@ pub fn Range(comptime T: type) type {
 
         pub fn filter(self: *const @This(), comptime P: anytype) FilterIterator(@This(), P) {
             return FilterIterator(@This(), P).init(self.*);
+        }
+
+        pub fn find(self: *const @This(), value: T) ?T {
+            var iter = self.*;
+            while (iter.next()) |v| {
+                if (value == v) return v;
+            }
+            return null;
         }
     };
 }
@@ -104,6 +120,14 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
         pub fn filter(self: *const @This(), comptime P: anytype) FilterIterator(@This(), P) {
             return FilterIterator(@This(), P).init(self.*);
         }
+
+        pub fn find(self: *const @This(), value: Out) ?Out {
+            var iter = self.*;
+            while (iter.next()) |v| {
+                if (value == v) return v;
+            }
+            return null;
+        }
     };
 }
 
@@ -131,6 +155,14 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
 
         pub fn filter(self: *const @This(), comptime P2: anytype) FilterIterator(@This(), P2) {
             return FilterIterator(@This(), P2).init(self.*);
+        }
+
+        pub fn find(self: *const @This(), value: T) ?T {
+            var iter = self.*;
+            while (iter.next()) |v| {
+                if (value == v) return v;
+            }
+            return null;
         }
     };
 }
