@@ -156,6 +156,41 @@ pub fn main() !void {
 }
 ```
 
+### Custom Struct
+
+```zig
+const MyStruct = struct {
+    value: i32,
+};
+
+fn squareStruct(s: MyStruct) MyStruct {
+    return MyStruct{
+        .value = s.value * s.value,
+    };
+}
+
+fn isEvenStruct(s: MyStruct) bool {
+    return @mod(s.value, 2) == 0;
+}
+
+pub fn main() void {
+    const array = [_]MyStruct{
+        .{ .value = 1 },
+        .{ .value = 2 },
+        .{ .value = 3 },
+        .{ .value = 4 },
+    };
+    const arrayRange = ranges.ArrayRange(MyStruct).init(&array);
+    var it = arrayRange
+        .map(squareStruct)
+        .filter(isEvenStruct);
+
+    while (it.next()) |v| {
+        std.debug.print("Squared struct value: {}\n", .{v});
+    }
+}
+```
+
 ## API Reference
 
 ### `Range(T)`
