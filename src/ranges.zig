@@ -1,4 +1,5 @@
 const std = @import("std");
+const ranges_test = @import("ranges_test.zig");
 
 pub fn ArrayRange(comptime T: type) type {
     return struct {
@@ -192,4 +193,3 @@ fn eq(comptime T: type, a: T, b: T) bool {
         else => @compileError("eq: unsupported type"),
     }
 }
-
