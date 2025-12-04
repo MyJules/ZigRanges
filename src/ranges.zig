@@ -231,27 +231,19 @@ fn eq(comptime T: type, a: T, b: T) bool {
 
 // Tests
 
-fn evenUsize(x: usize) bool {
-    return x % 2 == 0;
-}
-
-fn squareUsize(x: usize) usize {
-    return x * x;
-}
-
-fn evenI32(x: i32) bool {
-    return @mod(x, 2) == 0;
-}
-
-fn squareI32(x: i32) i32 {
-    return x * x;
-}
-
 test "test range function" {
     const range = Range(usize).init(0, 10);
     var it = range
-        .filter(evenUsize)
-        .map(squareUsize);
+        .filter(struct {
+            fn isEven(x: usize) bool {
+                return x % 2 == 0;
+            }
+        }.isEven)
+        .map(struct {
+            fn square(x: usize) usize {
+                return x * x;
+            }
+        }.square);
 
     const allocator = std.testing.allocator;
 
@@ -269,8 +261,16 @@ test "test array range function" {
     const array = [_]i32{ 1, 2, 3, 4, 5, 6 };
     const arrayRange = ArrayRange(i32).init(&array);
     var it = arrayRange
-        .filter(evenI32)
-        .map(squareI32);
+        .filter(struct {
+            fn isEven(x: i32) bool {
+                return @mod(x, 2) == 0;
+            }
+        }.isEven)
+        .map(struct {
+            fn square(x: i32) i32 {
+                return x * x;
+            }
+        }.square);
 
     const allocator = std.testing.allocator;
 
@@ -287,8 +287,16 @@ test "test array range function" {
 test "test find function" {
     const range = Range(usize).init(0, 100);
     const found = range
-        .filter(evenUsize)
-        .map(squareUsize)
+        .filter(struct {
+            fn isEven(x: usize) bool {
+                return x % 2 == 0;
+            }
+        }.isEven)
+        .map(struct {
+            fn square(x: usize) usize {
+                return x * x;
+            }
+        }.square)
         .find(1600);
 
     try std.testing.expect(found.? == 1600);
@@ -298,10 +306,14 @@ test "find inline test" {
     const array = [_]i32{ 10, 20, 30, 40, 50 };
     const arrayRange = ArrayRange(i32).init(&array);
     var it = arrayRange
-        .map(squareI32);
+        .map(struct {
+            fn double(x: i32) i32 {
+                return x * 2;
+            }
+        }.double);
 
-    const found = it.find(900);
-    try std.testing.expect(found.? == 900);
+    const found = it.find(100);
+    try std.testing.expect(found.? == 100);
 
     const not_found = it.find(1234);
     try std.testing.expect(not_found == null);
@@ -360,8 +372,16 @@ test "collect function test" {
     const allocator = std.testing.allocator;
     const range = Range(usize).init(0, 20);
     var collected = try range
-        .filter(evenUsize)
-        .map(squareUsize)
+        .filter(struct {
+            fn isEven(x: usize) bool {
+                return x % 2 == 0;
+            }
+        }.isEven)
+        .map(struct {
+            fn square(x: usize) usize {
+                return x * x;
+            }
+        }.square)
         .collect(allocator);
 
     defer collected.deinit(allocator);
