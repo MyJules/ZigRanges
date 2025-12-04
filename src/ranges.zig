@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// --- ArrayRange Iterator ---
 pub fn ArrayRange(comptime T: type) type {
     return struct {
         arr: []const T,
@@ -16,6 +17,7 @@ pub fn ArrayRange(comptime T: type) type {
             return v;
         }
 
+        // --- Transformations ---
         pub fn map(self: *const @This(), comptime F: anytype) MapIterator(@This(), F) {
             return MapIterator(@This(), F).init(self.*);
         }
@@ -24,6 +26,7 @@ pub fn ArrayRange(comptime T: type) type {
             return FilterIterator(@This(), P).init(self.*);
         }
 
+        // --- Queries ---
         pub fn find(self: *const @This(), value: T) ?T {
             var iter = self.*;
             while (iter.next()) |v| {
@@ -40,31 +43,85 @@ pub fn ArrayRange(comptime T: type) type {
             }
             return results;
         }
+
+        // --- New utility functions ---
+        pub fn forEach(self: *const @This(), comptime F: anytype) void {
+            var iter = self.*;
+            while (iter.next()) |v| F(v);
+        }
+
+        pub fn count(self: *const @This()) usize {
+            var cnt: usize = 0;
+            var iter = self.*;
+            while (iter.next()) |_| cnt += 1;
+            return cnt;
+        }
+
+        pub fn any(self: *const @This(), comptime P: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (P(v)) return true;
+            return false;
+        }
+
+        pub fn all(self: *const @This(), comptime P: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (!P(v)) return false;
+            return true;
+        }
+
+        pub fn fold(self: *const @This(), comptime F: anytype, initial: anytype) @TypeOf(initial) {
+            var acc = initial;
+            var iter = self.*;
+            while (iter.next()) |v| acc = F(acc, v);
+            return acc;
+        }
+
+        pub fn take(self: *const @This(), n: usize) ArrayRange(T) {
+            var iter = self.*;
+            var buf: [1024]T = undefined; // temporary fixed buffer
+            var idx: usize = 0;
+            while (idx < n) {
+                if (iter.next()) |v| {
+                    buf[idx] = v;
+                } else {
+                    break;
+                }
+                idx += 1;
+            }
+            return ArrayRange(T).init(buf[0..idx]);
+        }
+
+        pub fn skip(self: *const @This(), n: usize) ArrayRange(T) {
+            var iter = self.*;
+            var skipped: usize = 0;
+            while (skipped < n) {
+                if (iter.next()) |_| {
+                    skipped += 1;
+                } else {
+                    break;
+                }
+            }
+            const rest: []T = &iter.arr[iter.index..];
+            return ArrayRange(T).init(rest);
+        }
     };
 }
 
+/// --- Range Iterator ---
 pub fn Range(comptime T: type) type {
     return struct {
         start: T,
         end: T,
 
-        pub fn init(start: usize, end: usize) @This() {
-            return @This(){
-                .start = start,
-                .end = end,
-            };
+        pub fn init(start: T, end: T) @This() {
+            return @This(){ .start = start, .end = end };
         }
 
-        pub fn next(self: *@This()) ?usize {
+        pub fn next(self: *@This()) ?T {
             if (self.start >= self.end) return null;
             const v = self.start;
             self.start += 1;
             return v;
-        }
-
-        fn nextAdapter(ctx: *anyopaque) ?usize {
-            const p: *@This() = @ptrCast(@alignCast(@alignOf(ctx)));
-            return p.next();
         }
 
         pub fn map(self: *const @This(), comptime F: anytype) MapIterator(@This(), F) {
@@ -77,34 +134,51 @@ pub fn Range(comptime T: type) type {
 
         pub fn find(self: *const @This(), value: T) ?T {
             var iter = self.*;
-            while (iter.next()) |v| {
-                if (eq(T, value, v)) return v;
-            }
+            while (iter.next()) |v| if (eq(T, value, v)) return v;
             return null;
         }
 
         pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
             var results = try std.ArrayList(T).initCapacity(allocator, self.end - self.start);
             var iter = self.*;
-            while (iter.next()) |v| {
-                try results.append(allocator, v);
-            }
+            while (iter.next()) |v| try results.append(allocator, v);
             return results;
         }
-    };
-}
 
-fn Iterator(comptime T: type) type {
-    return struct {
-        nextFn: *const fn (ctx: *anyopaque) ?T,
-        ctx: *anyopaque,
+        pub fn forEach(self: *const @This(), comptime F: anytype) void {
+            var iter = self.*;
+            while (iter.next()) |v| F(v);
+        }
 
-        pub fn next(self: *@This()) ?T {
-            return self.nextFn(self.ctx);
+        pub fn count(self: *const @This()) usize {
+            var cnt: usize = 0;
+            var iter = self.*;
+            while (iter.next()) |_| cnt += 1;
+            return cnt;
+        }
+
+        pub fn any(self: *const @This(), comptime P: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (P(v)) return true;
+            return false;
+        }
+
+        pub fn all(self: *const @This(), comptime P: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (!P(v)) return false;
+            return true;
+        }
+
+        pub fn fold(self: *const @This(), comptime F: anytype, initial: anytype) @TypeOf(initial) {
+            var acc = initial;
+            var iter = self.*;
+            while (iter.next()) |v| acc = F(acc, v);
+            return acc;
         }
     };
 }
 
+/// --- MapIterator ---
 fn getFnInfo(comptime F: anytype) @TypeOf(@typeInfo(@TypeOf(F)).@"fn") {
     const ti = @typeInfo(@TypeOf(F));
     if (ti != .@"fn") @compileError("expected function");
@@ -137,23 +211,51 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
 
         pub fn find(self: *const @This(), value: Out) ?Out {
             var iter = self.*;
-            while (iter.next()) |v| {
-                if (eq(Out, value, v)) return v;
-            }
+            while (iter.next()) |v| if (eq(Out, value, v)) return v;
             return null;
         }
 
         pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(Out) {
             var results = try std.ArrayList(Out).initCapacity(allocator, 0);
             var iter = self.*;
-            while (iter.next()) |v| {
-                try results.append(allocator, v);
-            }
+            while (iter.next()) |v| try results.append(allocator, v);
             return results;
+        }
+
+        pub fn forEach(self: *const @This(), comptime F2: anytype) void {
+            var iter = self.*;
+            while (iter.next()) |v| F2(v);
+        }
+
+        pub fn count(self: *const @This()) usize {
+            var cnt: usize = 0;
+            var iter = self.*;
+            while (iter.next()) |_| cnt += 1;
+            return cnt;
+        }
+
+        pub fn any(self: *const @This(), comptime P2: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (P2(v)) return true;
+            return false;
+        }
+
+        pub fn all(self: *const @This(), comptime P2: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (!P2(v)) return false;
+            return true;
+        }
+
+        pub fn fold(self: *const @This(), comptime F2: anytype, initial: anytype) initial {
+            var acc = initial;
+            var iter = self.*;
+            while (iter.next()) |v| acc = F2(acc, v);
+            return acc;
         }
     };
 }
 
+/// --- FilterIterator ---
 fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
     const info = getFnInfo(P);
     const T = info.params[0].type.?;
@@ -166,9 +268,7 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         }
 
         pub fn next(self: *@This()) ?T {
-            while (self.inner.next()) |v| {
-                if (P(v)) return v;
-            }
+            while (self.inner.next()) |v| if (P(v)) return v;
             return null;
         }
 
@@ -182,19 +282,46 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
 
         pub fn find(self: *const @This(), value: T) ?T {
             var iter = self.*;
-            while (iter.next()) |v| {
-                if (eq(T, value, v)) return v;
-            }
+            while (iter.next()) |v| if (eq(T, value, v)) return v;
             return null;
         }
 
         pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
             var results = try std.ArrayList(T).initCapacity(allocator, 0);
             var iter = self.*;
-            while (iter.next()) |v| {
-                try results.append(allocator, v);
-            }
+            while (iter.next()) |v| try results.append(allocator, v);
             return results;
+        }
+
+        pub fn forEach(self: *const @This(), comptime F2: anytype) void {
+            var iter = self.*;
+            while (iter.next()) |v| F2(v);
+        }
+
+        pub fn count(self: *const @This()) usize {
+            var cnt: usize = 0;
+            var iter = self.*;
+            while (iter.next()) |_| cnt += 1;
+            return cnt;
+        }
+
+        pub fn any(self: *const @This(), comptime P2: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (P2(v)) return true;
+            return false;
+        }
+
+        pub fn all(self: *const @This(), comptime P2: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (!P2(v)) return false;
+            return true;
+        }
+
+        pub fn fold(self: *const @This(), comptime F2: anytype, initial: anytype) @TypeOf(initial) {
+            var acc = initial;
+            var iter = self.*;
+            while (iter.next()) |v| acc = F2(acc, v);
+            return acc;
         }
     };
 }
@@ -240,10 +367,10 @@ test "test range function" {
             }
         }.isEven)
         .map(struct {
-            fn square(x: usize) usize {
-                return x * x;
-            }
-        }.square);
+        fn square(x: usize) usize {
+            return x * x;
+        }
+    }.square);
 
     const allocator = std.testing.allocator;
 
@@ -267,10 +394,10 @@ test "test array range function" {
             }
         }.isEven)
         .map(struct {
-            fn square(x: i32) i32 {
-                return x * x;
-            }
-        }.square);
+        fn square(x: i32) i32 {
+            return x * x;
+        }
+    }.square);
 
     const allocator = std.testing.allocator;
 
@@ -307,10 +434,10 @@ test "find inline test" {
     const arrayRange = ArrayRange(i32).init(&array);
     var it = arrayRange
         .map(struct {
-            fn double(x: i32) i32 {
-                return x * 2;
-            }
-        }.double);
+        fn double(x: i32) i32 {
+            return x * 2;
+        }
+    }.double);
 
     const found = it.find(100);
     try std.testing.expect(found.? == 100);
@@ -388,4 +515,93 @@ test "collect function test" {
 
     const expected = [_]usize{ 0, 4, 16, 36, 64, 100, 144, 196, 256, 324 };
     try std.testing.expectEqualSlices(usize, expected[0..], collected.items);
+}
+
+test "fold function test" {
+    const range = Range(usize).init(1, 6);
+    const sum = range.fold(struct {
+        fn add(acc: usize, x: usize) usize {
+            return acc + x;
+        }
+    }.add, @as(usize, 0));
+
+    try std.testing.expect(sum == 15); // 1 + 2 + 3 + 4 + 5 = 15
+}
+
+test "fold with array range test" {
+    const array = [_]i32{ 1, 2, 3, 4 };
+    const arrayRange = ArrayRange(i32).init(&array);
+    const product = arrayRange.fold(struct {
+        fn multiply(acc: i32, x: i32) i32 {
+            return acc * x;
+        }
+    }.multiply, @as(i32, 1));
+
+    try std.testing.expect(product == 24); // 1 * 2 * 3 * 4 = 24
+}
+
+test "count function test" {
+    const range = Range(usize).init(0, 10);
+    const evenCount = range
+        .filter(struct {
+            fn isEven(x: usize) bool {
+                return x % 2 == 0;
+            }
+        }.isEven)
+        .count();
+
+    try std.testing.expect(evenCount == 5); // 0,2,4,6,8
+}
+
+test "any and all function test" {
+    const range = Range(usize).init(1, 10);
+
+    const hasEven = range.any(struct {
+        fn isEven(x: usize) bool {
+            return x % 2 == 0;
+        }
+    }.isEven);
+    try std.testing.expect(hasEven == true);
+
+    const allLessThanTen = range.all(struct {
+        fn isLessThanTen(x: usize) bool {
+            return x < 10;
+        }
+    }.isLessThanTen);
+    try std.testing.expect(allLessThanTen == true);
+}
+
+test "any function with array range" {
+    const array = [_]i32{ 1, 3, 5, 7, 8 };
+    const arrayRange = ArrayRange(i32).init(&array);
+
+    const hasEven = arrayRange.any(struct {
+        fn isEven(x: i32) bool {
+            return @mod(x, 2) == 0;
+        }
+    }.isEven);
+    try std.testing.expect(hasEven == true);
+}
+
+test "all function with false case" {
+    const range = Range(usize).init(1, 10);
+
+    const allLessThanFive = range.all(struct {
+        fn isLessThanFive(x: usize) bool {
+            return x < 5;
+        }
+    }.isLessThanFive);
+    try std.testing.expect(allLessThanFive == false);
+}
+
+test "all function with array range" {
+    const array = [_]i32{ 2, 4, 6, 8 };
+    const arrayRange = ArrayRange(i32).init(&array);
+
+    const allEven = arrayRange.all(struct {
+        fn isEven(x: i32) bool {
+            return @mod(x, 2) == 0;
+        }
+    }.isEven);
+    try std.testing.expect(allEven == true);
 }
