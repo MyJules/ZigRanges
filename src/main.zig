@@ -1,18 +1,6 @@
 const std = @import("std");
 const ranges = @import("ranges");
 
-fn isEven(x: usize) bool {
-    return x % 2 == 0;
-}
-
-fn square(x: usize) usize {
-    return x * x;
-}
-
-fn lessThen(x: usize) bool {
-    return x > 1000;
-}
-
 pub fn main() !void {
     var allocator = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = allocator.deinit();
@@ -21,9 +9,21 @@ pub fn main() !void {
 
     const range = ranges.Range(usize).init(0, 100);
     var it = range
-        .filter(isEven)
-        .map(square)
-        .filter(lessThen);
+    .filter(struct {
+            fn isEven(x: usize) bool {
+                return x % 2 == 0;
+            }
+        }.isEven)
+    .map(struct {
+            fn square(x: usize) usize {
+                return x * x;
+            }
+        }.square)
+    .filter(struct {
+            fn isLessThan(x: usize) bool {
+                return x < 1000;
+            }
+        }.isLessThan);
 
     const numOpt = it.find(1296);
     if (numOpt) |num| {
