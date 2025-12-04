@@ -69,35 +69,6 @@ pub fn ArrayRange(comptime T: type) type {
             while (iter.next()) |v| acc = F(acc, v);
             return acc;
         }
-
-        pub fn take(self: *const @This(), n: usize) ArrayRange(T) {
-            var iter = self.*;
-            var buf: [1024]T = undefined; // temporary fixed buffer
-            var idx: usize = 0;
-            while (idx < n) {
-                if (iter.next()) |v| {
-                    buf[idx] = v;
-                } else {
-                    break;
-                }
-                idx += 1;
-            }
-            return ArrayRange(T).init(buf[0..idx]);
-        }
-
-        pub fn skip(self: *const @This(), n: usize) ArrayRange(T) {
-            var iter = self.*;
-            var skipped: usize = 0;
-            while (skipped < n) {
-                if (iter.next()) |_| {
-                    skipped += 1;
-                } else {
-                    break;
-                }
-            }
-            const rest: []T = &iter.arr[iter.index..];
-            return ArrayRange(T).init(rest);
-        }
     };
 }
 
@@ -584,3 +555,4 @@ test "all function with array range" {
     }.isEven);
     try std.testing.expect(allEven == true);
 }
+
