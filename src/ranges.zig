@@ -44,12 +44,6 @@ pub fn ArrayRange(comptime T: type) type {
             return results;
         }
 
-        // --- New utility functions ---
-        pub fn forEach(self: *const @This(), comptime F: anytype) void {
-            var iter = self.*;
-            while (iter.next()) |v| F(v);
-        }
-
         pub fn count(self: *const @This()) usize {
             var cnt: usize = 0;
             var iter = self.*;
@@ -145,11 +139,6 @@ pub fn Range(comptime T: type) type {
             return results;
         }
 
-        pub fn forEach(self: *const @This(), comptime F: anytype) void {
-            var iter = self.*;
-            while (iter.next()) |v| F(v);
-        }
-
         pub fn count(self: *const @This()) usize {
             var cnt: usize = 0;
             var iter = self.*;
@@ -222,11 +211,6 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
             return results;
         }
 
-        pub fn forEach(self: *const @This(), comptime F2: anytype) void {
-            var iter = self.*;
-            while (iter.next()) |v| F2(v);
-        }
-
         pub fn count(self: *const @This()) usize {
             var cnt: usize = 0;
             var iter = self.*;
@@ -291,11 +275,6 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
             var iter = self.*;
             while (iter.next()) |v| try results.append(allocator, v);
             return results;
-        }
-
-        pub fn forEach(self: *const @This(), comptime F2: anytype) void {
-            var iter = self.*;
-            while (iter.next()) |v| F2(v);
         }
 
         pub fn count(self: *const @This()) usize {
