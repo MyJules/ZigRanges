@@ -368,31 +368,377 @@ pub fn main() !void {
 }
 ```
 
+### Fold Operations (Reduce)
+
+```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
+fn add(acc: i32, x: i32) i32 {
+    return acc + x;
+}
+
+fn multiply(acc: i32, x: i32) i32 {
+    return acc * x;
+}
+
+pub fn main() void {
+    // Sum of numbers 1 to 10
+    const sum = ranges.Range(i32).init(1, 11)
+        .fold(0, add);
+    std.debug.print("Sum: {}\n", .{sum});
+    // Output: Sum: 55
+    
+    // Product (factorial of 5)
+    const product = ranges.Range(i32).init(1, 6)
+        .fold(1, multiply);
+    std.debug.print("Product: {}\n", .{product});
+    // Output: Product: 120
+    
+    // Sum of squares
+    const sumOfSquares = ranges.Range(i32).init(1, 6)
+        .map(square)
+        .fold(0, add);
+    std.debug.print("Sum of squares: {}\n", .{sumOfSquares});
+    // Output: Sum of squares: 55
+}
+
+fn square(x: i32) i32 {
+    return x * x;
+}
+```
+
+### Any and All Predicates
+
+```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
+fn isNegative(x: i32) bool {
+    return x < 0;
+}
+
+fn isPositive(x: i32) bool {
+    return x > 0;
+}
+
+fn isEven(x: i32) bool {
+    return @mod(x, 2) == 0;
+}
+
+pub fn main() void {
+    // Check if any element is negative
+    const hasNegative = ranges.Range(i32).init(-5, 5)
+        .any(isNegative);
+    std.debug.print("Has negative? {}\n", .{hasNegative});
+    // Output: Has negative? true
+    
+    // Check if all elements are positive
+    const allPositive = ranges.Range(i32).init(1, 10)
+        .all(isPositive);
+    std.debug.print("All positive? {}\n", .{allPositive});
+    // Output: All positive? true
+    
+    // Check filtered range
+    const allEven = ranges.Range(i32).init(0, 20)
+        .filter(isEven)
+        .all(isEven);
+    std.debug.print("All even? {}\n", .{allEven});
+    // Output: All even? true
+}
+```
+
+### Count and Find Operations
+
+```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
+fn isEven(x: i32) bool {
+    return @mod(x, 2) == 0;
+}
+
+fn square(x: i32) i32 {
+    return x * x;
+}
+
+pub fn main() void {
+    // Count even numbers
+    const evenCount = ranges.Range(i32).init(0, 21)
+        .filter(isEven)
+        .count();
+    std.debug.print("Number of evens: {}\n", .{evenCount});
+    // Output: Number of evens: 10
+    
+    // Find a specific value in transformed range
+    const found = ranges.Range(i32).init(1, 100)
+        .map(square)
+        .find(1600);
+    
+    if (found) |value| {
+        std.debug.print("Found: {}\n", .{value});
+        // Output: Found: 1600
+    }
+}
+```
+
+### Complex Operation Chains
+
+```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
+fn isOdd(x: i32) bool {
+    return @mod(x, 2) != 0;
+}
+
+fn square(x: i32) i32 {
+    return x * x;
+}
+
+fn lessThan100(x: i32) bool {
+    return x < 100;
+}
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    // Chain multiple operations: filter odds, square them, 
+    // keep only those < 100, then sort
+    var result = try ranges.Range(i32).init(1, 20)
+        .filter(isOdd)
+        .map(square)
+        .filter(lessThan100)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+    
+    std.debug.print("Result: {any}\n", .{result.items});
+    // Output: Result: [1, 9, 25, 49, 81]
+}
+```
+
+### Working with ArrayList
+
+```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
+fn isEven(x: i32) bool {
+    return @mod(x, 2) == 0;
+}
+
+fn square(x: i32) i32 {
+    return x * x;
+}
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    // Create ArrayList
+    var list = std.ArrayList(i32).init(allocator);
+    defer list.deinit();
+    
+    try list.append(allocator, 5);
+    try list.append(allocator, 2);
+    try list.append(allocator, 8);
+    try list.append(allocator, 1);
+    
+    // Sort the ArrayList items using ranges
+    var sorted = try ranges.ArrayRange(i32).init(list.items)
+        .sorted(allocator);
+    defer sorted.deinit(allocator);
+    
+    std.debug.print("Original: {any}\n", .{list.items});
+    std.debug.print("Sorted: {any}\n", .{sorted.items});
+    // Output: Original: [5, 2, 8, 1]
+    //         Sorted: [1, 2, 5, 8]
+    
+    // Filter and transform
+    var transformed = try ranges.ArrayRange(i32).init(list.items)
+        .filter(isEven)
+        .map(square)
+        .collect(allocator);
+    defer transformed.deinit(allocator);
+    
+    std.debug.print("Evens squared: {any}\n", .{transformed.items});
+    // Output: Evens squared: [4, 64]
+}
+```
+
+### Collecting to Different Types
+
+```zig
+const std = @import("std");
+const ranges = @import("ranges");
+
+fn square(x: i32) i32 {
+    return x * x;
+}
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    
+    // Collect to ArrayList
+    var arrayList = try ranges.Range(i32).init(1, 6)
+        .map(square)
+        .collect(allocator);
+    defer arrayList.deinit(allocator);
+    std.debug.print("ArrayList: {any}\n", .{arrayList.items});
+    // Output: ArrayList: [1, 4, 9, 16, 25]
+    
+    // Collect to owned slice
+    const slice = try ranges.Range(i32).init(1, 6)
+        .map(square)
+        .collectSlice(allocator);
+    defer allocator.free(slice);
+    std.debug.print("Slice: {any}\n", .{slice});
+    // Output: Slice: [1, 4, 9, 16, 25]
+    
+    // Collect to fixed-size array
+    const array = try ranges.Range(i32).init(1, 6)
+        .map(square)
+        .collectArray(5);
+    std.debug.print("Array: {any}\n", .{array});
+    // Output: Array: [1, 4, 9, 16, 25]
+}
+```
+
+## Common Use Cases
+
+### Data Processing Pipeline
+
+Process a collection through multiple transformation steps:
+
+```zig
+const data = [_]i32{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+
+var result = try ranges.ArrayRange(i32).init(&data)
+    .filter(isEven)           // Keep only even numbers
+    .map(square)              // Square each number  
+    .filter(lessThan50)       // Keep only values < 50
+    .sorted(allocator);       // Sort the results
+defer result.deinit(allocator);
+```
+
+### Statistical Operations
+
+Calculate statistics over a range:
+
+```zig
+// Average using fold
+const sum = ranges.Range(i32).init(1, 11).fold(0, add);
+const avg = @divTrunc(sum, 10);
+
+// Count elements matching criteria
+const evenCount = ranges.Range(i32).init(1, 101)
+    .filter(isEven)
+    .count();
+
+// Check for outliers
+const hasOutlier = ranges.ArrayRange(i32).init(&measurements)
+    .any(isOutlier);
+```
+
+### Validation
+
+Check if data meets criteria:
+
+```zig
+const allValid = ranges.ArrayRange(User).init(&users)
+    .all(User.isValid);
+
+const hasAdmin = ranges.ArrayRange(User).init(&users)
+    .any(User.isAdmin);
+```
+
+### Data Transformation
+
+Transform collections efficiently:
+
+```zig
+// Convert array of structs to array of specific fields
+var ages = try ranges.ArrayRange(Person).init(&people)
+    .map(Person.getAge)
+    .sorted(allocator);
+defer ages.deinit(allocator);
+
+// Normalize data
+var normalized = try ranges.ArrayRange(f32).init(&values)
+    .map(normalize)
+    .collectSlice(allocator);
+defer allocator.free(normalized);
+```
+
 ## API Reference
 
 ### `Range(T)`
 
 Creates a numeric range iterator.
 
-**Methods:**
-- `init(start: usize, end: usize)` - Create a range from start (inclusive) to end (exclusive)
+**Constructor:**
+- `init(start: T, end: T)` - Create a range from start (inclusive) to end (exclusive)
+
+**Iterator Methods:**
 - `next()` - Get the next value, returns `?T`
-- `map(comptime F)` - Transform each element
-- `filter(comptime P)` - Keep only elements matching a predicate
-- `find(value: T)` - Find a specific value, returns `?T`
+
+**Transformation Methods:**
+- `map(comptime F)` - Transform each element using function `F`
+- `filter(comptime P)` - Keep only elements matching predicate `P`
+
+**Collection Methods:**
 - `collect(allocator)` - Collect all elements into an `ArrayList(T)`
+- `collectSlice(allocator)` - Collect all elements into an owned slice `[]T`
+- `collectArray(comptime size: usize)` - Collect all elements into a fixed-size array `[size]T`
+
+**Search Methods:**
+- `find(value: T)` - Find a specific value, returns `?T`
+- `any(comptime P)` - Check if any element matches predicate `P`, returns `bool`
+- `all(comptime P)` - Check if all elements match predicate `P`, returns `bool`
+- `count()` - Count the number of elements, returns `usize`
+
+**Aggregation Methods:**
+- `fold(init: T, comptime F)` - Reduce elements using function `F` with initial value `init`
+
+**Sorting Methods:**
+- `sorted(allocator)` - Sort elements and return `ArrayList(T)` (for primitive types)
+- `sortedSlice(allocator)` - Sort elements and return owned slice `[]T` (for primitive types)
+- `sortedBy(allocator, comptime lessThan)` - Sort using custom comparison function
+- `sortedSliceBy(allocator, comptime lessThan)` - Sort using custom comparison, return slice
+- `sortedWith(allocator, comptime lessThan, context)` - Sort with context parameter
+- `sortedSliceWith(allocator, comptime lessThan, context)` - Sort with context, return slice
 
 ### `ArrayRange(T)`
 
-Creates an iterator over array elements.
+Creates an iterator over array/slice elements.
 
-**Methods:**
-- `init(arr: []const T)` - Create an iterator from a slice
-- `next()` - Get the next value, returns `?T`
-- `map(comptime F)` - Transform each element
-- `filter(comptime P)` - Keep only elements matching a predicate
-- `find(value: T)` - Find a specific value, returns `?T`
-- `collect(allocator)` - Collect all elements into an `ArrayList(T)`
+**Constructor:**
+- `init(arr: []const T)` - Create an iterator from a slice or array
+
+**All the same methods as `Range(T)` are available**
+
+### Predicate and Transform Functions
+
+Functions passed to `filter`, `map`, `any`, `all`, and `fold` should follow these signatures:
+
+```zig
+// Predicate: takes T, returns bool
+fn predicate(value: T) bool
+
+// Transform: takes T, returns U (can be same or different type)
+fn transform(value: T) U
+
+// Fold: takes accumulator and value, returns accumulator
+fn foldFunc(acc: T, value: T) T
+
+// Comparison: takes two T, returns bool (true if a < b)
+fn lessThan(a: T, b: T) bool
+```
 
 ## Building
 
@@ -424,7 +770,14 @@ Test coverage includes:
 
 ## Requirements
 
-- Zig 0.11.0 or later
+- Zig 0.13.0 or later
+
+## Performance Notes
+
+- **Lazy Evaluation**: `map` and `filter` operations are lazy - they don't execute until you iterate or collect
+- **Zero-Copy Iteration**: Basic iteration over ranges and arrays has zero allocation overhead
+- **Efficient Sorting**: Uses Zig's standard library sorting (Tim sort variant) - O(n log n) time complexity
+- **Allocation**: Only collection operations (`collect`, `collectSlice`) and sorting require memory allocation
 
 ## License
 
