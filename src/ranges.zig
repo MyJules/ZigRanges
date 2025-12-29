@@ -123,7 +123,7 @@ fn IteratorOps(comptime T: type) type {
         ///
         /// Example:
         ///   iter.map(square)  // where square(x) returns x*x
-        pub fn map(self: anytype, comptime F: anytype) MapIterator(@TypeOf(self.*), F) {
+        pub inline fn map(self: anytype, comptime F: anytype) MapIterator(@TypeOf(self.*), F) {
             return MapIterator(@TypeOf(self.*), F).init(self.*);
         }
 
@@ -135,7 +135,7 @@ fn IteratorOps(comptime T: type) type {
         ///
         /// Example:
         ///   iter.filter(isEven)  // where isEven(x) returns x % 2 == 0
-        pub fn filter(self: anytype, comptime P: anytype) FilterIterator(@TypeOf(self.*), P) {
+        pub inline fn filter(self: anytype, comptime P: anytype) FilterIterator(@TypeOf(self.*), P) {
             return FilterIterator(@TypeOf(self.*), P).init(self.*);
         }
 
@@ -147,7 +147,7 @@ fn IteratorOps(comptime T: type) type {
         ///   - value: The value to search for
         ///
         /// Returns: The found value or null
-        pub fn find(self: anytype, value: T) ?T {
+        pub inline fn find(self: anytype, value: T) ?T {
             var iter = self.*;
             while (iter.next()) |v| {
                 if (eq(T, value, v)) return v;
@@ -215,7 +215,7 @@ fn IteratorOps(comptime T: type) type {
         /// This is a terminal operation that consumes the iterator.
         ///
         /// Returns: The total number of elements
-        pub fn count(self: anytype) usize {
+        pub inline fn count(self: anytype) usize {
             var cnt: usize = 0;
             var iter = self.*;
             while (iter.next()) |_| cnt += 1;
@@ -230,7 +230,7 @@ fn IteratorOps(comptime T: type) type {
         ///   - P: A compile-time predicate function that returns bool
         ///
         /// Returns: true if at least one element satisfies P, false otherwise
-        pub fn any(self: anytype, comptime P: anytype) bool {
+        pub inline fn any(self: anytype, comptime P: anytype) bool {
             var iter = self.*;
             while (iter.next()) |v| if (P(v)) return true;
             return false;
@@ -244,7 +244,7 @@ fn IteratorOps(comptime T: type) type {
         ///   - P: A compile-time predicate function that returns bool
         ///
         /// Returns: true if all elements satisfy P, false otherwise
-        pub fn all(self: anytype, comptime P: anytype) bool {
+        pub inline fn all(self: anytype, comptime P: anytype) bool {
             var iter = self.*;
             while (iter.next()) |v| if (!P(v)) return false;
             return true;
@@ -262,7 +262,7 @@ fn IteratorOps(comptime T: type) type {
         /// Example:
         ///   iter.fold(add, 0)  // Sum all elements
         ///   iter.fold(multiply, 1)  // Product of all elements
-        pub fn fold(self: anytype, comptime F: anytype, initial: anytype) @TypeOf(initial) {
+        pub inline fn fold(self: anytype, comptime F: anytype, initial: anytype) @TypeOf(initial) {
             var acc = initial;
             var iter = self.*;
             while (iter.next()) |v| acc = F(acc, v);
@@ -475,14 +475,14 @@ pub fn ArrayRange(comptime T: type) type {
         ///   - arr: The slice to iterate over
         ///
         /// Returns: A new ArrayRange iterator positioned at the start
-        pub fn init(arr: []const T) @This() {
+        pub inline fn init(arr: []const T) @This() {
             return .{ .arr = arr, .index = 0 };
         }
 
         /// Advance the iterator and return the next element.
         ///
         /// Returns: The next element, or null if the iterator is exhausted
-        pub fn next(self: *@This()) ?T {
+        pub inline fn next(self: *@This()) ?T {
             if (self.index >= self.arr.len) return null;
             const v = self.arr[self.index];
             self.index += 1;
@@ -541,14 +541,14 @@ pub fn Range(comptime T: type) type {
         /// Returns: A new Range iterator
         ///
         /// Note: If start >= end, the iterator is immediately exhausted
-        pub fn init(start: T, end: T) @This() {
+        pub inline fn init(start: T, end: T) @This() {
             return @This(){ .start = start, .end = end };
         }
 
         /// Advance the iterator and return the next value in the range.
         ///
         /// Returns: The next value, or null if the range is exhausted
-        pub fn next(self: *@This()) ?T {
+        pub inline fn next(self: *@This()) ?T {
             if (self.start >= self.end) return null;
             const v = self.start;
             self.start += 1;
@@ -602,7 +602,7 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
         ///   - inner: The source iterator to transform
         ///
         /// Returns: A new MapIterator
-        pub fn init(inner: Inner) @This() {
+        pub inline fn init(inner: Inner) @This() {
             return .{ .inner = inner };
         }
 
@@ -610,7 +610,7 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
         ///
         /// Returns: F applied to the next element from the inner iterator,
         ///          or null if the inner iterator is exhausted
-        pub fn next(self: *@This()) ?Out {
+        pub inline fn next(self: *@This()) ?Out {
             const v = self.inner.next() orelse return null;
             return F(v);
         }
@@ -662,7 +662,7 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         ///   - inner: The source iterator to filter
         ///
         /// Returns: A new FilterIterator
-        pub fn init(inner: Inner) @This() {
+        pub inline fn init(inner: Inner) @This() {
             return .{ .inner = inner };
         }
 
@@ -671,7 +671,7 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         ///
         /// Returns: The next element where P(element) is true,
         ///          or null if no more matching elements exist
-        pub fn next(self: *@This()) ?T {
+        pub inline fn next(self: *@This()) ?T {
             while (self.inner.next()) |v| if (P(v)) return v;
             return null;
         }
