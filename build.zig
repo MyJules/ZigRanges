@@ -4,10 +4,13 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const mod = b.addModule("Ranges", .{
+    // Expose the ranges module for use as a dependency
+    const ranges_module = b.addModule("ranges", .{
         .root_source_file = b.path("src/ranges.zig"),
-        .target = target,
     });
+
+    // Keep backward compatibility
+    const mod = ranges_module;
 
     const exe = b.addExecutable(.{
         .name = "ZigRanges",
@@ -35,7 +38,11 @@ pub fn build(b: *std.Build) void {
     }
 
     const mod_unit_tests = b.addTest(.{
-        .root_module = mod,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/ranges.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const run_mod_tests = b.addRunArtifact(mod_unit_tests);
