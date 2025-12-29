@@ -21,6 +21,16 @@
 //   - Range(T): Iterate over numeric ranges [start, end)
 //   - ArrayRange(T): Iterate over slices/arrays
 //
+// Working with std containers:
+//   ArrayRange works with any std container that exposes a slice:
+//   - ArrayList: use .items to get the slice
+//   - BoundedArray: use .slice() or .constSlice()
+//   - Static arrays: pass &array or array[0..]
+//
+//   Example with ArrayList:
+//     var list = try std.ArrayList(i32).initCapacity(allocator, 10);
+//     var iter = ArrayRange(i32).init(list.items);
+//
 // Transformation Operations (return new iterators):
 //   - map(F): Transform each element with function F
 //   - filter(P): Keep only elements where predicate P returns true
@@ -808,4 +818,49 @@ test "collectArray with wrong size returns error" {
         .collectArray(5);
 
     try std.testing.expectError(error.TooFewElements, result);
+}
+
+test "ArrayRange works with ArrayList.items" {
+    const allocator = std.testing.allocator;
+    var list = try std.ArrayList(i32).initCapacity(allocator, 5);
+    defer list.deinit(allocator);
+
+    try list.append(allocator, 10);
+    try list.append(allocator, 20);
+    try list.append(allocator, 30);
+    try list.append(allocator, 40);
+    try list.append(allocator, 50);
+
+    // Use ArrayRange on ArrayList.items slice
+    var iter = ArrayRange(i32).init(list.items)
+        .filter(struct {
+            fn isEven(x: i32) bool {
+                return @mod(x, 2) == 0;
+            }
+        }.isEven)
+        .map(struct {
+        fn half(x: i32) i32 {
+            return @divTrunc(x, 2);
+        }
+    }.half);
+
+    // Use collect() to gather results into an ArrayList
+    var results = try iter.collect(allocator);
+    defer results.deinit(allocator);
+
+    const expected = [_]i32{ 5, 10, 15, 20, 25 };
+    try std.testing.expectEqualSlices(i32, expected[0..], results.items);
+}
+
+test "ArrayRange works with static array" {
+    const array = [_]i32{ 1, 2, 3, 4, 5 };
+    var iter = ArrayRange(i32).init(&array);
+
+    const sum = iter.fold(struct {
+        fn add(acc: i32, x: i32) i32 {
+            return acc + x;
+        }
+    }.add, @as(i32, 0));
+
+    try std.testing.expect(sum == 15);
 }
