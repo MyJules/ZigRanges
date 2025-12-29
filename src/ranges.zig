@@ -1,10 +1,76 @@
 const std = @import("std");
 
+/// --- Helper Functions ---
+fn getFnInfo(comptime F: anytype) @TypeOf(@typeInfo(@TypeOf(F)).@"fn") {
+    const ti = @typeInfo(@TypeOf(F));
+    if (ti != .@"fn") @compileError("expected function");
+    return ti.@"fn";
+}
+
+/// --- Iterator Mixin ---
+/// Generates common iterator operations for any type with a next() method
+fn IteratorOps(comptime T: type) type {
+    return struct {
+        pub fn map(self: anytype, comptime F: anytype) MapIterator(@TypeOf(self.*), F) {
+            return MapIterator(@TypeOf(self.*), F).init(self.*);
+        }
+
+        pub fn filter(self: anytype, comptime P: anytype) FilterIterator(@TypeOf(self.*), P) {
+            return FilterIterator(@TypeOf(self.*), P).init(self.*);
+        }
+
+        pub fn find(self: anytype, value: T) ?T {
+            var iter = self.*;
+            while (iter.next()) |v| {
+                if (eq(T, value, v)) return v;
+            }
+            return null;
+        }
+
+        pub fn collect(self: anytype, allocator: std.mem.Allocator) !std.ArrayList(T) {
+            var results = try std.ArrayList(T).initCapacity(allocator, 0);
+            var iter = self.*;
+            while (iter.next()) |v| {
+                try results.append(allocator, v);
+            }
+            return results;
+        }
+
+        pub fn count(self: anytype) usize {
+            var cnt: usize = 0;
+            var iter = self.*;
+            while (iter.next()) |_| cnt += 1;
+            return cnt;
+        }
+
+        pub fn any(self: anytype, comptime P: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (P(v)) return true;
+            return false;
+        }
+
+        pub fn all(self: anytype, comptime P: anytype) bool {
+            var iter = self.*;
+            while (iter.next()) |v| if (!P(v)) return false;
+            return true;
+        }
+
+        pub fn fold(self: anytype, comptime F: anytype, initial: anytype) @TypeOf(initial) {
+            var acc = initial;
+            var iter = self.*;
+            while (iter.next()) |v| acc = F(acc, v);
+            return acc;
+        }
+    };
+}
+
 /// --- ArrayRange Iterator ---
 pub fn ArrayRange(comptime T: type) type {
     return struct {
         arr: []const T,
         index: usize,
+
+        const Ops = IteratorOps(T);
 
         pub fn init(arr: []const T) @This() {
             return .{ .arr = arr, .index = 0 };
@@ -17,58 +83,14 @@ pub fn ArrayRange(comptime T: type) type {
             return v;
         }
 
-        // --- Transformations ---
-        pub fn map(self: *const @This(), comptime F: anytype) MapIterator(@This(), F) {
-            return MapIterator(@This(), F).init(self.*);
-        }
-
-        pub fn filter(self: *const @This(), comptime P: anytype) FilterIterator(@This(), P) {
-            return FilterIterator(@This(), P).init(self.*);
-        }
-
-        // --- Queries ---
-        pub fn find(self: *const @This(), value: T) ?T {
-            var iter = self.*;
-            while (iter.next()) |v| {
-                if (eq(T, value, v)) return v;
-            }
-            return null;
-        }
-
-        pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
-            var results = try std.ArrayList(T).initCapacity(allocator, self.arr.len);
-            var iter = self.*;
-            while (iter.next()) |v| {
-                try results.append(allocator, v);
-            }
-            return results;
-        }
-
-        pub fn count(self: *const @This()) usize {
-            var cnt: usize = 0;
-            var iter = self.*;
-            while (iter.next()) |_| cnt += 1;
-            return cnt;
-        }
-
-        pub fn any(self: *const @This(), comptime P: anytype) bool {
-            var iter = self.*;
-            while (iter.next()) |v| if (P(v)) return true;
-            return false;
-        }
-
-        pub fn all(self: *const @This(), comptime P: anytype) bool {
-            var iter = self.*;
-            while (iter.next()) |v| if (!P(v)) return false;
-            return true;
-        }
-
-        pub fn fold(self: *const @This(), comptime F: anytype, initial: anytype) @TypeOf(initial) {
-            var acc = initial;
-            var iter = self.*;
-            while (iter.next()) |v| acc = F(acc, v);
-            return acc;
-        }
+        pub const map = Ops.map;
+        pub const filter = Ops.filter;
+        pub const find = Ops.find;
+        pub const collect = Ops.collect;
+        pub const count = Ops.count;
+        pub const any = Ops.any;
+        pub const all = Ops.all;
+        pub const fold = Ops.fold;
     };
 }
 
@@ -77,6 +99,8 @@ pub fn Range(comptime T: type) type {
     return struct {
         start: T,
         end: T,
+
+        const Ops = IteratorOps(T);
 
         pub fn init(start: T, end: T) @This() {
             return @This(){ .start = start, .end = end };
@@ -89,68 +113,26 @@ pub fn Range(comptime T: type) type {
             return v;
         }
 
-        pub fn map(self: *const @This(), comptime F: anytype) MapIterator(@This(), F) {
-            return MapIterator(@This(), F).init(self.*);
-        }
-
-        pub fn filter(self: *const @This(), comptime P: anytype) FilterIterator(@This(), P) {
-            return FilterIterator(@This(), P).init(self.*);
-        }
-
-        pub fn find(self: *const @This(), value: T) ?T {
-            var iter = self.*;
-            while (iter.next()) |v| if (eq(T, value, v)) return v;
-            return null;
-        }
-
-        pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
-            var results = try std.ArrayList(T).initCapacity(allocator, self.end - self.start);
-            var iter = self.*;
-            while (iter.next()) |v| try results.append(allocator, v);
-            return results;
-        }
-
-        pub fn count(self: *const @This()) usize {
-            var cnt: usize = 0;
-            var iter = self.*;
-            while (iter.next()) |_| cnt += 1;
-            return cnt;
-        }
-
-        pub fn any(self: *const @This(), comptime P: anytype) bool {
-            var iter = self.*;
-            while (iter.next()) |v| if (P(v)) return true;
-            return false;
-        }
-
-        pub fn all(self: *const @This(), comptime P: anytype) bool {
-            var iter = self.*;
-            while (iter.next()) |v| if (!P(v)) return false;
-            return true;
-        }
-
-        pub fn fold(self: *const @This(), comptime F: anytype, initial: anytype) @TypeOf(initial) {
-            var acc = initial;
-            var iter = self.*;
-            while (iter.next()) |v| acc = F(acc, v);
-            return acc;
-        }
+        pub const map = Ops.map;
+        pub const filter = Ops.filter;
+        pub const find = Ops.find;
+        pub const collect = Ops.collect;
+        pub const count = Ops.count;
+        pub const any = Ops.any;
+        pub const all = Ops.all;
+        pub const fold = Ops.fold;
     };
 }
 
 /// --- MapIterator ---
-fn getFnInfo(comptime F: anytype) @TypeOf(@typeInfo(@TypeOf(F)).@"fn") {
-    const ti = @typeInfo(@TypeOf(F));
-    if (ti != .@"fn") @compileError("expected function");
-    return ti.@"fn";
-}
-
 fn MapIterator(comptime Inner: type, comptime F: anytype) type {
     const info = getFnInfo(F);
     const Out = info.return_type.?;
 
     return struct {
         inner: Inner,
+
+        const Ops = IteratorOps(Out);
 
         pub fn init(inner: Inner) @This() {
             return .{ .inner = inner };
@@ -161,52 +143,14 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
             return F(v);
         }
 
-        pub fn map(self: *const @This(), comptime G: anytype) MapIterator(@This(), G) {
-            return MapIterator(@This(), G).init(self.*);
-        }
-
-        pub fn filter(self: *const @This(), comptime P: anytype) FilterIterator(@This(), P) {
-            return FilterIterator(@This(), P).init(self.*);
-        }
-
-        pub fn find(self: *const @This(), value: Out) ?Out {
-            var iter = self.*;
-            while (iter.next()) |v| if (eq(Out, value, v)) return v;
-            return null;
-        }
-
-        pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(Out) {
-            var results = try std.ArrayList(Out).initCapacity(allocator, 0);
-            var iter = self.*;
-            while (iter.next()) |v| try results.append(allocator, v);
-            return results;
-        }
-
-        pub fn count(self: *const @This()) usize {
-            var cnt: usize = 0;
-            var iter = self.*;
-            while (iter.next()) |_| cnt += 1;
-            return cnt;
-        }
-
-        pub fn any(self: *const @This(), comptime P2: anytype) bool {
-            var iter = self.*;
-            while (iter.next()) |v| if (P2(v)) return true;
-            return false;
-        }
-
-        pub fn all(self: *const @This(), comptime P2: anytype) bool {
-            var iter = self.*;
-            while (iter.next()) |v| if (!P2(v)) return false;
-            return true;
-        }
-
-        pub fn fold(self: *const @This(), comptime F2: anytype, initial: anytype) initial {
-            var acc = initial;
-            var iter = self.*;
-            while (iter.next()) |v| acc = F2(acc, v);
-            return acc;
-        }
+        pub const map = Ops.map;
+        pub const filter = Ops.filter;
+        pub const find = Ops.find;
+        pub const collect = Ops.collect;
+        pub const count = Ops.count;
+        pub const any = Ops.any;
+        pub const all = Ops.all;
+        pub const fold = Ops.fold;
     };
 }
 
@@ -218,6 +162,8 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
     return struct {
         inner: Inner,
 
+        const Ops = IteratorOps(T);
+
         pub fn init(inner: Inner) @This() {
             return .{ .inner = inner };
         }
@@ -227,52 +173,14 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
             return null;
         }
 
-        pub fn map(self: *const @This(), comptime F: anytype) MapIterator(@This(), F) {
-            return MapIterator(@This(), F).init(self.*);
-        }
-
-        pub fn filter(self: *const @This(), comptime P2: anytype) FilterIterator(@This(), P2) {
-            return FilterIterator(@This(), P2).init(self.*);
-        }
-
-        pub fn find(self: *const @This(), value: T) ?T {
-            var iter = self.*;
-            while (iter.next()) |v| if (eq(T, value, v)) return v;
-            return null;
-        }
-
-        pub fn collect(self: *const @This(), allocator: std.mem.Allocator) !std.ArrayList(T) {
-            var results = try std.ArrayList(T).initCapacity(allocator, 0);
-            var iter = self.*;
-            while (iter.next()) |v| try results.append(allocator, v);
-            return results;
-        }
-
-        pub fn count(self: *const @This()) usize {
-            var cnt: usize = 0;
-            var iter = self.*;
-            while (iter.next()) |_| cnt += 1;
-            return cnt;
-        }
-
-        pub fn any(self: *const @This(), comptime P2: anytype) bool {
-            var iter = self.*;
-            while (iter.next()) |v| if (P2(v)) return true;
-            return false;
-        }
-
-        pub fn all(self: *const @This(), comptime P2: anytype) bool {
-            var iter = self.*;
-            while (iter.next()) |v| if (!P2(v)) return false;
-            return true;
-        }
-
-        pub fn fold(self: *const @This(), comptime F2: anytype, initial: anytype) @TypeOf(initial) {
-            var acc = initial;
-            var iter = self.*;
-            while (iter.next()) |v| acc = F2(acc, v);
-            return acc;
-        }
+        pub const map = Ops.map;
+        pub const filter = Ops.filter;
+        pub const find = Ops.find;
+        pub const collect = Ops.collect;
+        pub const count = Ops.count;
+        pub const any = Ops.any;
+        pub const all = Ops.all;
+        pub const fold = Ops.fold;
     };
 }
 
@@ -555,4 +463,3 @@ test "all function with array range" {
     }.isEven);
     try std.testing.expect(allEven == true);
 }
-
