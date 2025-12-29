@@ -36,6 +36,26 @@ fn IteratorOps(comptime T: type) type {
             return results;
         }
 
+        /// Collect into a slice (caller owns memory)
+        pub fn collectSlice(self: anytype, allocator: std.mem.Allocator) ![]T {
+            var list = try self.collect(allocator);
+            defer list.deinit(allocator);
+            return list.toOwnedSlice(allocator);
+        }
+
+        /// Collect into a fixed-size array, returns error if iterator has more/fewer elements
+        pub fn collectArray(self: anytype, comptime N: usize) ![N]T {
+            var result: [N]T = undefined;
+            var iter = self.*;
+            var i: usize = 0;
+            while (iter.next()) |v| : (i += 1) {
+                if (i >= N) return error.TooManyElements;
+                result[i] = v;
+            }
+            if (i < N) return error.TooFewElements;
+            return result;
+        }
+
         pub fn count(self: anytype) usize {
             var cnt: usize = 0;
             var iter = self.*;
@@ -87,6 +107,8 @@ pub fn ArrayRange(comptime T: type) type {
         pub const filter = Ops.filter;
         pub const find = Ops.find;
         pub const collect = Ops.collect;
+        pub const collectSlice = Ops.collectSlice;
+        pub const collectArray = Ops.collectArray;
         pub const count = Ops.count;
         pub const any = Ops.any;
         pub const all = Ops.all;
@@ -117,6 +139,8 @@ pub fn Range(comptime T: type) type {
         pub const filter = Ops.filter;
         pub const find = Ops.find;
         pub const collect = Ops.collect;
+        pub const collectSlice = Ops.collectSlice;
+        pub const collectArray = Ops.collectArray;
         pub const count = Ops.count;
         pub const any = Ops.any;
         pub const all = Ops.all;
@@ -147,6 +171,8 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
         pub const filter = Ops.filter;
         pub const find = Ops.find;
         pub const collect = Ops.collect;
+        pub const collectSlice = Ops.collectSlice;
+        pub const collectArray = Ops.collectArray;
         pub const count = Ops.count;
         pub const any = Ops.any;
         pub const all = Ops.all;
@@ -177,6 +203,8 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         pub const filter = Ops.filter;
         pub const find = Ops.find;
         pub const collect = Ops.collect;
+        pub const collectSlice = Ops.collectSlice;
+        pub const collectArray = Ops.collectArray;
         pub const count = Ops.count;
         pub const any = Ops.any;
         pub const all = Ops.all;
@@ -462,4 +490,48 @@ test "all function with array range" {
         }
     }.isEven);
     try std.testing.expect(allEven == true);
+}
+
+test "collectSlice function test" {
+    const allocator = std.testing.allocator;
+    const range = Range(usize).init(1, 6);
+    const slice = try range
+        .filter(struct {
+            fn isEven(x: usize) bool {
+                return x % 2 == 0;
+            }
+        }.isEven)
+        .collectSlice(allocator);
+
+    defer allocator.free(slice);
+
+    const expected = [_]usize{ 2, 4 };
+    try std.testing.expectEqualSlices(usize, expected[0..], slice);
+}
+
+test "collectArray function test" {
+    const range = Range(usize).init(1, 6);
+    const array = try range
+        .filter(struct {
+            fn isEven(x: usize) bool {
+                return x % 2 == 0;
+            }
+        }.isEven)
+        .collectArray(2);
+
+    const expected = [_]usize{ 2, 4 };
+    try std.testing.expectEqualSlices(usize, expected[0..], array[0..]);
+}
+
+test "collectArray with wrong size returns error" {
+    const range = Range(usize).init(1, 6);
+    const result = range
+        .filter(struct {
+            fn isEven(x: usize) bool {
+                return x % 2 == 0;
+            }
+        }.isEven)
+        .collectArray(5);
+
+    try std.testing.expectError(error.TooFewElements, result);
 }
