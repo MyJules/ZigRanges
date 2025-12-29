@@ -13,6 +13,16 @@
 //       // Process transformed values
 //   }
 //
+// Custom Type Sorting:
+//   const Person = struct {
+//       name: []const u8,
+//       age: u32,
+//       fn compareByAge(a: Person, b: Person) bool {
+//           return a.age < b.age;
+//       }
+//   };
+//   var sorted = try people.sortedBy(allocator, Person.compareByAge);
+//
 // ============================================================================
 // API Overview
 // ============================================================================
@@ -45,6 +55,12 @@
 //   - any(P): Check if any element satisfies predicate P
 //   - all(P): Check if all elements satisfy predicate P
 //   - fold(F, initial): Reduce to single value with folding function F
+//   - sorted(allocator): Sort elements and return ArrayList (uses std.mem.sort)
+//   - sortedSlice(allocator): Sort elements and return owned slice
+//   - sortedBy(allocator, cmpFn): Sort with custom comparison (no context)
+//   - sortedSliceBy(allocator, cmpFn): Sort with custom comparison, return slice
+//   - sortedWith(allocator, cmpFn, ctx): Sort with comparison + context (advanced)
+//   - sortedSliceWith(allocator, cmpFn, ctx): Sort with comparison + context, return slice
 //
 // All operations support method chaining and lazy evaluation.
 //
@@ -91,6 +107,12 @@ fn getFnInfo(comptime F: anytype) @TypeOf(@typeInfo(@TypeOf(F)).@"fn") {
 ///   - any: Check if any element matches a predicate
 ///   - all: Check if all elements match a predicate
 ///   - fold: Reduce all elements to a single value
+///   - sorted: Sort elements and return ArrayList
+///   - sortedSlice: Sort elements and return owned slice
+///   - sortedBy: Sort with custom comparison function
+///   - sortedSliceBy: Sort with custom comparison, return slice
+///   - sortedWith: Sort with custom comparison + context (advanced)
+///   - sortedSliceWith: Sort with custom comparison + context, return slice
 fn IteratorOps(comptime T: type) type {
     return struct {
         /// Transform each element using the provided function.
@@ -246,7 +268,181 @@ fn IteratorOps(comptime T: type) type {
             while (iter.next()) |v| acc = F(acc, v);
             return acc;
         }
+
+        /// Collect and sort all elements into an ArrayList.
+        /// This is a terminal operation that consumes the iterator.
+        /// Uses std.mem.sort with an optimal sorting algorithm.
+        ///
+        /// Parameters:
+        ///   - allocator: Memory allocator for the ArrayList
+        ///
+        /// Returns: ArrayList containing all elements in sorted order
+        ///
+        /// Note: Caller is responsible for calling deinit() on the returned ArrayList.
+        ///       Type T must be comparable (supports <, >, ==).
+        ///
+        /// Performance: O(n log n) time complexity using std.mem.sort
+        pub fn sorted(self: anytype, allocator: std.mem.Allocator) !std.ArrayList(T) {
+            const results = try self.collect(allocator);
+            std.mem.sort(T, results.items, {}, comptime lessThan(T));
+            return results;
+        }
+
+        /// Collect and sort all elements into a slice.
+        /// This is a terminal operation that consumes the iterator.
+        ///
+        /// Parameters:
+        ///   - allocator: Memory allocator for the slice
+        ///
+        /// Returns: Owned slice containing all elements in sorted order
+        ///
+        /// Note: Caller must free the returned slice using allocator.free().
+        ///       Type T must be comparable (supports <, >, ==).
+        ///
+        /// Performance: O(n log n) time complexity using std.mem.sort
+        pub fn sortedSlice(self: anytype, allocator: std.mem.Allocator) ![]T {
+            var list = try self.sorted(allocator);
+            defer list.deinit(allocator);
+            return list.toOwnedSlice(allocator);
+        }
+
+        /// Collect and sort all elements using a custom comparison function.
+        /// Simplified version without context for common cases.
+        /// This is a terminal operation that consumes the iterator.
+        ///
+        /// Parameters:
+        ///   - allocator: Memory allocator for the ArrayList
+        ///   - comptime lessThanFn: Comparison function (a, b) -> bool
+        ///                          Returns true if a should come before b
+        ///
+        /// Returns: ArrayList containing all elements in sorted order
+        ///
+        /// Note: Works with any type, including custom structs.
+        ///       Caller is responsible for calling deinit() on the returned ArrayList.
+        ///       For comparison functions that need extra data, use sortedWith().
+        ///
+        /// Example:
+        ///   sortedBy(allocator, comparePerson)
+        ///   where comparePerson = fn(a: Person, b: Person) bool
+        ///
+        /// Performance: O(n log n) time complexity using std.mem.sort
+        pub fn sortedBy(
+            self: anytype,
+            allocator: std.mem.Allocator,
+            comptime lessThanFn: anytype,
+        ) !std.ArrayList(T) {
+            const Wrapper = struct {
+                fn compare(_: void, a: T, b: T) bool {
+                    return lessThanFn(a, b);
+                }
+            };
+            return self.sortedWith(allocator, Wrapper.compare, {});
+        }
+
+        /// Collect and sort all elements using a custom comparison function with context.
+        /// This is a terminal operation that consumes the iterator.
+        ///
+        /// Parameters:
+        ///   - allocator: Memory allocator for the ArrayList
+        ///   - comptime lessThanFn: Comparison function (context, a, b) -> bool
+        ///                          Returns true if a should come before b
+        ///   - context: Context passed to the comparison function
+        ///
+        /// Returns: ArrayList containing all elements in sorted order
+        ///
+        /// Note: Use this when your comparison function needs external data.
+        ///       For simple comparisons, use sortedBy() instead.
+        ///       Caller is responsible for calling deinit() on the returned ArrayList.
+        ///
+        /// Example:
+        ///   const ctx = SortContext{ .scores = &scores };
+        ///   sortedWith(allocator, compareByScore, ctx)
+        ///   where compareByScore = fn(ctx: SortContext, a: T, b: T) bool
+        ///
+        /// Performance: O(n log n) time complexity using std.mem.sort
+        pub fn sortedWith(
+            self: anytype,
+            allocator: std.mem.Allocator,
+            comptime lessThanFn: anytype,
+            context: anytype,
+        ) !std.ArrayList(T) {
+            const results = try self.collect(allocator);
+            std.mem.sort(T, results.items, context, lessThanFn);
+            return results;
+        }
+
+        /// Collect and sort all elements into a slice using a custom comparison function.
+        /// Simplified version without context for common cases.
+        /// This is a terminal operation that consumes the iterator.
+        ///
+        /// Parameters:
+        ///   - allocator: Memory allocator for the slice
+        ///   - comptime lessThanFn: Comparison function (a, b) -> bool
+        ///
+        /// Returns: Owned slice containing all elements in sorted order
+        ///
+        /// Note: Caller must free the returned slice using allocator.free()
+        ///       For comparison functions that need extra data, use sortedSliceWith().
+        ///
+        /// Performance: O(n log n) time complexity using std.mem.sort
+        pub fn sortedSliceBy(
+            self: anytype,
+            allocator: std.mem.Allocator,
+            comptime lessThanFn: anytype,
+        ) ![]T {
+            var list = try self.sortedBy(allocator, lessThanFn);
+            defer list.deinit(allocator);
+            return list.toOwnedSlice(allocator);
+        }
+
+        /// Collect and sort all elements into a slice using a custom comparison function with context.
+        /// This is a terminal operation that consumes the iterator.
+        ///
+        /// Parameters:
+        ///   - allocator: Memory allocator for the slice
+        ///   - comptime lessThanFn: Comparison function (context, a, b) -> bool
+        ///   - context: Context passed to the comparison function
+        ///
+        /// Returns: Owned slice containing all elements in sorted order
+        ///
+        /// Note: Caller must free the returned slice using allocator.free()
+        ///
+        /// Performance: O(n log n) time complexity using std.mem.sort
+        pub fn sortedSliceWith(
+            self: anytype,
+            allocator: std.mem.Allocator,
+            comptime lessThanFn: anytype,
+            context: anytype,
+        ) ![]T {
+            var list = try self.sortedWith(allocator, lessThanFn, context);
+            defer list.deinit(allocator);
+            return list.toOwnedSlice(allocator);
+        }
     };
+}
+
+/// Generic less-than comparison for sortable types.
+/// Used by the sorted() operations to compare elements.
+///
+/// Supports:
+///   - Numeric types (int, float)
+///   - Booleans (false < true)
+///
+/// Parameters:
+///   - T: The type to compare
+///
+/// Returns: A comparison function compatible with std.mem.sort
+fn lessThan(comptime T: type) fn (void, T, T) bool {
+    return struct {
+        fn inner(_: void, a: T, b: T) bool {
+            const info = @typeInfo(T);
+            return switch (info) {
+                .int, .float => a < b,
+                .bool => !a and b, // false < true
+                else => @compileError("sorted() requires a comparable type (int, float, or bool)"),
+            };
+        }
+    }.inner;
 }
 
 /// --- ArrayRange Iterator ---
@@ -303,6 +499,12 @@ pub fn ArrayRange(comptime T: type) type {
         pub const any = Ops.any;
         pub const all = Ops.all;
         pub const fold = Ops.fold;
+        pub const sorted = Ops.sorted;
+        pub const sortedSlice = Ops.sortedSlice;
+        pub const sortedBy = Ops.sortedBy;
+        pub const sortedSliceBy = Ops.sortedSliceBy;
+        pub const sortedWith = Ops.sortedWith;
+        pub const sortedSliceWith = Ops.sortedSliceWith;
     };
 }
 
@@ -363,6 +565,12 @@ pub fn Range(comptime T: type) type {
         pub const any = Ops.any;
         pub const all = Ops.all;
         pub const fold = Ops.fold;
+        pub const sorted = Ops.sorted;
+        pub const sortedSlice = Ops.sortedSlice;
+        pub const sortedBy = Ops.sortedBy;
+        pub const sortedSliceBy = Ops.sortedSliceBy;
+        pub const sortedWith = Ops.sortedWith;
+        pub const sortedSliceWith = Ops.sortedSliceWith;
     };
 }
 
@@ -417,6 +625,12 @@ fn MapIterator(comptime Inner: type, comptime F: anytype) type {
         pub const any = Ops.any;
         pub const all = Ops.all;
         pub const fold = Ops.fold;
+        pub const sorted = Ops.sorted;
+        pub const sortedSlice = Ops.sortedSlice;
+        pub const sortedBy = Ops.sortedBy;
+        pub const sortedSliceBy = Ops.sortedSliceBy;
+        pub const sortedWith = Ops.sortedWith;
+        pub const sortedSliceWith = Ops.sortedSliceWith;
     };
 }
 
@@ -472,6 +686,12 @@ fn FilterIterator(comptime Inner: type, comptime P: anytype) type {
         pub const any = Ops.any;
         pub const all = Ops.all;
         pub const fold = Ops.fold;
+        pub const sorted = Ops.sorted;
+        pub const sortedSlice = Ops.sortedSlice;
+        pub const sortedBy = Ops.sortedBy;
+        pub const sortedSliceBy = Ops.sortedSliceBy;
+        pub const sortedWith = Ops.sortedWith;
+        pub const sortedSliceWith = Ops.sortedSliceWith;
     };
 }
 
@@ -863,4 +1083,328 @@ test "ArrayRange works with static array" {
     }.add, @as(i32, 0));
 
     try std.testing.expect(sum == 15);
+}
+
+// ============================================================================
+// Sort Tests
+// ============================================================================
+
+test "sorted with Range - ascending integers" {
+    const allocator = std.testing.allocator;
+
+    // Create unsorted range with filter (removes evens, keeps odds)
+    var result = try Range(i32).init(10, 1) // Intentionally descending
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    // Should be empty because start > end
+    try std.testing.expectEqual(@as(usize, 0), result.items.len);
+
+    // Try actual sorting
+    var sorted_result = try Range(i32).init(1, 10)
+        .sorted(allocator);
+    defer sorted_result.deinit(allocator);
+
+    const expected = [_]i32{ 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    try std.testing.expectEqualSlices(i32, expected[0..], sorted_result.items);
+}
+
+test "sorted with ArrayRange - unsorted array" {
+    const allocator = std.testing.allocator;
+    const array = [_]i32{ 5, 2, 8, 1, 9, 3, 7, 4, 6 };
+
+    var result = try ArrayRange(i32).init(&array)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    const expected = [_]i32{ 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    try std.testing.expectEqualSlices(i32, expected[0..], result.items);
+}
+
+test "sorted with filter and map - complex chain" {
+    const allocator = std.testing.allocator;
+    const array = [_]i32{ 10, 3, 7, 1, 9, 4, 2, 8, 5, 6 };
+
+    // Filter odds, square them, then sort
+    var result = try ArrayRange(i32).init(&array)
+        .filter(struct {
+            fn isOdd(x: i32) bool {
+                return @mod(x, 2) != 0;
+            }
+        }.isOdd)
+        .map(struct {
+            fn square(x: i32) i32 {
+                return x * x;
+            }
+        }.square)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    // Odds: 3,7,1,9,5 -> squared: 9,49,1,81,25 -> sorted: 1,9,25,49,81
+    const expected = [_]i32{ 1, 9, 25, 49, 81 };
+    try std.testing.expectEqualSlices(i32, expected[0..], result.items);
+}
+
+test "sortedSlice with negative numbers" {
+    const allocator = std.testing.allocator;
+    const array = [_]i32{ 3, -1, 4, -5, 2, -3, 0 };
+
+    const result = try ArrayRange(i32).init(&array)
+        .sortedSlice(allocator);
+    defer allocator.free(result);
+
+    const expected = [_]i32{ -5, -3, -1, 0, 2, 3, 4 };
+    try std.testing.expectEqualSlices(i32, expected[0..], result);
+}
+
+test "sorted with floats" {
+    const allocator = std.testing.allocator;
+    const array = [_]f32{ 3.14, 1.41, 2.71, 0.5, 4.0, 1.0 };
+
+    var result = try ArrayRange(f32).init(&array)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    const expected = [_]f32{ 0.5, 1.0, 1.41, 2.71, 3.14, 4.0 };
+    try std.testing.expectEqualSlices(f32, expected[0..], result.items);
+}
+
+test "sorted preserves duplicates" {
+    const allocator = std.testing.allocator;
+    const array = [_]i32{ 5, 2, 5, 1, 2, 5, 3 };
+
+    var result = try ArrayRange(i32).init(&array)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    const expected = [_]i32{ 1, 2, 2, 3, 5, 5, 5 };
+    try std.testing.expectEqualSlices(i32, expected[0..], result.items);
+}
+
+test "sorted with empty range" {
+    const allocator = std.testing.allocator;
+
+    var result = try Range(i32).init(0, 0)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), result.items.len);
+}
+
+test "sorted with single element" {
+    const allocator = std.testing.allocator;
+    const array = [_]i32{42};
+
+    var result = try ArrayRange(i32).init(&array)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    const expected = [_]i32{42};
+    try std.testing.expectEqualSlices(i32, expected[0..], result.items);
+}
+
+test "sorted performance with large range" {
+    const allocator = std.testing.allocator;
+
+    // Create a large range and sort it (already sorted, but tests performance)
+    var result = try Range(i32).init(0, 1000)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    // Verify first and last elements
+    try std.testing.expectEqual(@as(i32, 0), result.items[0]);
+    try std.testing.expectEqual(@as(i32, 999), result.items[999]);
+    try std.testing.expectEqual(@as(usize, 1000), result.items.len);
+}
+
+// ============================================================================
+// Custom Type Sorting Tests
+// ============================================================================
+
+const Person = struct {
+    name: []const u8,
+    age: u32,
+
+    fn compareByAge(a: Person, b: Person) bool {
+        return a.age < b.age;
+    }
+
+    fn compareByName(a: Person, b: Person) bool {
+        return std.mem.order(u8, a.name, b.name) == .lt;
+    }
+};
+
+test "sortedBy with custom struct - sort by age" {
+    const allocator = std.testing.allocator;
+
+    const people = [_]Person{
+        .{ .name = "Alice", .age = 30 },
+        .{ .name = "Bob", .age = 25 },
+        .{ .name = "Charlie", .age = 35 },
+        .{ .name = "Diana", .age = 20 },
+    };
+
+    var result = try ArrayRange(Person).init(&people)
+        .sortedBy(allocator, Person.compareByAge);
+    defer result.deinit(allocator);
+
+    try std.testing.expectEqual(@as(u32, 20), result.items[0].age);
+    try std.testing.expectEqual(@as(u32, 25), result.items[1].age);
+    try std.testing.expectEqual(@as(u32, 30), result.items[2].age);
+    try std.testing.expectEqual(@as(u32, 35), result.items[3].age);
+
+    try std.testing.expectEqualStrings("Diana", result.items[0].name);
+    try std.testing.expectEqualStrings("Bob", result.items[1].name);
+    try std.testing.expectEqualStrings("Alice", result.items[2].name);
+    try std.testing.expectEqualStrings("Charlie", result.items[3].name);
+}
+
+test "sortedBy with custom struct - sort by name" {
+    const allocator = std.testing.allocator;
+
+    const people = [_]Person{
+        .{ .name = "Charlie", .age = 35 },
+        .{ .name = "Alice", .age = 30 },
+        .{ .name = "Diana", .age = 20 },
+        .{ .name = "Bob", .age = 25 },
+    };
+
+    var result = try ArrayRange(Person).init(&people)
+        .sortedBy(allocator, Person.compareByName);
+    defer result.deinit(allocator);
+
+    try std.testing.expectEqualStrings("Alice", result.items[0].name);
+    try std.testing.expectEqualStrings("Bob", result.items[1].name);
+    try std.testing.expectEqualStrings("Charlie", result.items[2].name);
+    try std.testing.expectEqualStrings("Diana", result.items[3].name);
+}
+
+test "sortedSliceBy with custom comparison" {
+    const allocator = std.testing.allocator;
+
+    const people = [_]Person{
+        .{ .name = "Alice", .age = 30 },
+        .{ .name = "Bob", .age = 25 },
+        .{ .name = "Charlie", .age = 35 },
+    };
+
+    const result = try ArrayRange(Person).init(&people)
+        .sortedSliceBy(allocator, Person.compareByAge);
+    defer allocator.free(result);
+
+    try std.testing.expectEqual(@as(u32, 25), result[0].age);
+    try std.testing.expectEqual(@as(u32, 30), result[1].age);
+    try std.testing.expectEqual(@as(u32, 35), result[2].age);
+}
+
+const Point = struct {
+    x: i32,
+    y: i32,
+
+    fn distanceFromOrigin(self: Point) i32 {
+        return self.x * self.x + self.y * self.y;
+    }
+
+    fn compareByDistance(a: Point, b: Point) bool {
+        return a.distanceFromOrigin() < b.distanceFromOrigin();
+    }
+};
+
+test "sortedBy with points - distance from origin" {
+    const allocator = std.testing.allocator;
+
+    const points = [_]Point{
+        .{ .x = 3, .y = 4 }, // distance: 25
+        .{ .x = 1, .y = 1 }, // distance: 2
+        .{ .x = 5, .y = 0 }, // distance: 25
+        .{ .x = 2, .y = 2 }, // distance: 8
+    };
+
+    var result = try ArrayRange(Point).init(&points)
+        .sortedBy(allocator, Point.compareByDistance);
+    defer result.deinit(allocator);
+
+    try std.testing.expectEqual(@as(i32, 2), result.items[0].distanceFromOrigin());
+    try std.testing.expectEqual(@as(i32, 8), result.items[1].distanceFromOrigin());
+    try std.testing.expectEqual(@as(i32, 25), result.items[2].distanceFromOrigin());
+    try std.testing.expectEqual(@as(i32, 25), result.items[3].distanceFromOrigin());
+}
+
+test "sortedBy with filter and map - complex chain with custom type" {
+    const allocator = std.testing.allocator;
+
+    const people = [_]Person{
+        .{ .name = "Alice", .age = 30 },
+        .{ .name = "Bob", .age = 17 },
+        .{ .name = "Charlie", .age = 35 },
+        .{ .name = "Diana", .age = 19 },
+        .{ .name = "Eve", .age = 40 },
+    };
+
+    // Filter adults (age >= 18), map to ages, then sort
+    var result = try ArrayRange(Person).init(&people)
+        .filter(struct {
+            fn isAdult(p: Person) bool {
+                return p.age >= 18;
+            }
+        }.isAdult)
+        .map(struct {
+            fn getAge(p: Person) u32 {
+                return p.age;
+            }
+        }.getAge)
+        .sorted(allocator);
+    defer result.deinit(allocator);
+
+    const expected = [_]u32{ 19, 30, 35, 40 };
+    try std.testing.expectEqualSlices(u32, expected[0..], result.items);
+}
+
+test "sortedBy with descending order" {
+    const allocator = std.testing.allocator;
+
+    const compareDesc = struct {
+        fn f(a: i32, b: i32) bool {
+            return a > b; // Reverse comparison for descending order
+        }
+    }.f;
+
+    const array = [_]i32{ 3, 1, 4, 1, 5, 9, 2, 6 };
+    var result = try ArrayRange(i32).init(&array)
+        .sortedBy(allocator, compareDesc);
+    defer result.deinit(allocator);
+
+    const expected = [_]i32{ 9, 6, 5, 4, 3, 2, 1, 1 };
+    try std.testing.expectEqualSlices(i32, expected[0..], result.items);
+}
+
+test "sortedWith with context - sort indices by external scores" {
+    const allocator = std.testing.allocator;
+
+    // Real use case: sort indices based on scores in a separate array
+    const scores = [_]u32{ 85, 92, 78, 95, 88 };
+    const indices = [_]usize{ 0, 1, 2, 3, 4 };
+
+    const SortContext = struct {
+        scores: []const u32,
+
+        fn compareByScore(ctx: @This(), a: usize, b: usize) bool {
+            return ctx.scores[a] < ctx.scores[b];
+        }
+    };
+
+    const ctx = SortContext{ .scores = &scores };
+    var result = try ArrayRange(usize).init(&indices)
+        .sortedWith(allocator, SortContext.compareByScore, ctx);
+    defer result.deinit(allocator);
+
+    // Indices sorted by their corresponding scores: 78, 85, 88, 92, 95
+    const expected = [_]usize{ 2, 0, 4, 1, 3 };
+    try std.testing.expectEqualSlices(usize, expected[0..], result.items);
+
+    // Verify the scores are in ascending order when accessed via sorted indices
+    try std.testing.expect(scores[result.items[0]] < scores[result.items[1]]);
+    try std.testing.expect(scores[result.items[1]] < scores[result.items[2]]);
+    try std.testing.expect(scores[result.items[2]] < scores[result.items[3]]);
+    try std.testing.expect(scores[result.items[3]] < scores[result.items[4]]);
 }
